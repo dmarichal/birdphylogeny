@@ -1,0 +1,106 @@
+---
+title: "Bird Phylogeny"
+author: "Danielle Marichal"
+date: "2026-10-20"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+##Download the AVONET dataset from the OpenTraits database (https://opentraits.org/datasets/avonet.html). You specifically want the AVONET Supplementary dataset 1.xlsx file and the tab of that Excel file you will use is AVONET3_BirdTree. You’ll have to generate a CSV or TSV of that tab.
+##Using the BirdTree Phylogeny from BirdTree.org, go to the Phylogeny Subsets tab, and select at least 50 species (Tinamus tao through Rhea pennata is exactly 50 species). Select the source of trees to be Stage2 FP Trees Hackett and create 100 trees. It may take several minutes for the trees to generate and be emailed to you. Note: every time you run this, you will get a different set of 100 trees, so there will be some variation between you and your classmates even if you choose the same 50 taxa.
+##Assignment 3: Once the trees download, generate a consensus tree in R using the following code: library(phangorn) trees_file <- "/PATH/TO/YOUR/FILE/output.nex" trees <- read.nexus(trees_file) consensus_tree <- ls.consensus(trees) plot(consensus_tree) .... Your tree probably will not be very resolved (many polytomies) – do not worry about it for this assignment.
+##Merge together the phylogeny and the trait data. Start with the following code and then debug. library(geiger) trait_data <- read.csv("PATH/TO/YOUR/FILE/AVONET Supplementary dataset 1.csv") trait_data$Species3 <- gsub(" ","_",trait_data$Species3) rownames(trait_data) <- trait_data$Species3 name.check(consensus_tree, trait_data)
+library(readr)
+AVONET_Supplementary_dataset_1 <- read_csv("AVONET Supplementary dataset 1.csv")
+View(AVONET_Supplementary_dataset_1)
+library(phangorn)
+trees_file <- "//Users/daniellemarichal/Documents/Datasets/output.nex"
+trees <- read.nexus(trees_file)
+library(phytools)
+consensus_tree <- ls.consensus(trees)
+par(mar = c(2, 2, 2, 8))
+plot(consensus_tree,cex = 0.3,label.offset = 0.01,no.margin = FALSE)
+library(geiger)
+library(ape)
+library(nlme)
+trait_data <- read.csv("/Users/daniellemarichal/Documents/GitHub/desktop-tutorial/AVONET Supplementary dataset 1.csv")
+trait_data$Species3 <- gsub(" ","_",trait_data$Species3)
+focus_species <- c("Tinamus tao","Tinamus solitarius","Tinamus osgoodi","Tinamus major","Tinamus guttatus","Nothocercus bonapartei","Nothocercus julius","Nothocercus nigrocapillus","Crypturellus berlepschi","Crypturellus cinereus","Crypturellus soui","Crypturellus ptaritepui","Crypturellus obsoletus","Crypturellus cinnamomeus","Crypturellus undulatus","Crypturellus transfasciatus","Crypturellus strigulosus","Crypturellus boucardi","Crypturellus kerriae","Crypturellus erythropus","Crypturellus duidae","Crypturellus noctivagus","Crypturellus atrocapillus","Crypturellus variegatus","Crypturellus brevirostris","Crypturellus bartletti","Crypturellus parvirostris","Crypturellus casiquiare","Crypturellus tataupa","Rhynchotus rufescens","Nothoprocta taczanowskii","Nothoprocta ornata","Nothoprocta pentlandii","Nothoprocta cinerascens","Nothoprocta perdicaria","Nothoprocta curvirostris","Nothura darwinii","Nothura chacoensis","Nothura maculosa","Nothura minor","Nothura boraquira","Taoniscus nanus","Eudromia elegans","Eudromia formosa","Tinamotis pentlandii","Tinamotis ingoufi","Rhynchotus maculicollis","Struthio camelus","Rhea americana","Rhea pennata")
+fifty_species <- gsub(" ", "_", focus_species)
+consensus_tree$tip.label <- gsub(" ", "_", consensus_tree$tip.label)
+rownames(trait_data) <- trait_data$Species3
+fifty_trait_species <- trait_data[trait_data$Species3 %in% fifty_species,]
+chosenspecies <- intersect(fifty_species,consensus_tree$tip.label)
+pruned_tree <- drop.tip(consensus_tree,setdiff(consensus_tree$tip.label, chosenspecies))
+rownames(fifty_trait_species) <- fifty_trait_species$Species3
+par(mar = c(2, 2, 2, 8))
+plot(pruned_tree,cex = 0.3,label.offset = 0.01,no.margin = FALSE)
+name.check(pruned_tree, fifty_trait_species)
+# Run a PGLS analysis using phytools. If you need assistance, try using this guide (including sample data): http://www.phytools.org/Cordoba2017/ex/4/PGLS.html
+datos<-read.csv("Barbetdata.csv",header=TRUE,row.names=1)
+datos
+#These data are from a study in which the purpose was to identify factors that were associated with the evolucion of characteristics of song in an group of Asian bird species called “barbets.”
+arbol<-read.nexus("BarbetTree.nex")
+#One useful step that we haven't covered so far is to ensure that all the species in the data are in the tree & vice versa.Remeber that if there are any spelling differences, even small, then the tree & dataset will not coincide.To establish that we have the same species in our data as in the tree, or vice versa, we can use a function in the geiger package called name.check.
+obj<-name.check(arbol,datos)
+obj
+#We should see that there are 9 species in the tree for which we do not have data. We have to prune these species from the tree to proceed with the analysis. We can do this using the function drop.tip as we learned:
+arbol.cortado<-drop.tip(arbol,obj$tree_not_data)
+#Now the data & the tree should coincide in both number of species and names. We can verify this using name.check: name.check(arbol.cortado,datos) Now that we are sure that the tree and dataset match, we can start to explore the phylogenetic GLS. There are two primary packages that can be used to conduct PGLS: ape (with nlme) and caper. There are differences between the two packages in how they work and the information each package and corresponding function returns. First, we will explore phylogenetic GLS in ape. Phylogenetic GLS is basically a linear model in which the covariance (correlation) structure between species is permitted to match that expected under a Brownian motion process* of evolution on the tree. (*Or other processes.) Consequently, the first step is to define this covariance structure. We do this as follows:
+datos$Species <- rownames(datos)
+bm<- corBrownian(phy = arbol.cortado,form = ~ Species)
+bm
+#We have defined a variance-covariance structure based on the model of Brownian evolution that we learned earlier. The first model we will fit is for a simple analysis investigating the relationship between altitude at which a species is found and the length of the note in its song.
+library(nlme)
+modelo1<-gls(Lnote~Lnalt, data=datos, correlation=bm)
+summary(modelo1)
+#Look at the information tha this object contains. It should be very similar (in fact, almost identical) to what we see after performing a standard, OLS linear regression. It is also possible to conduct this analysis while relaxing the assumption of Brownian motion. The most simple generalization of the Brownian model is one with one additional parameter to scale the expected covariance under pairs of species. This model is called the λ model of Pagel (Pagel's λ). When λ = 0 the covariance between species is zero and this corresponds to a non-phylogenetic regression. By contrast, when &lambda = 1, the evolution of the residual error is Brownian. Let's try, then, to repeat our analysis with the λ model.
+rownames(datos)<- datos$Species
+modelo2 <- gls(Lnote ~ Lnalt,data = datos,correlation = corPagel(value = 1,phy = arbol.cortado,form = ~ Species),na.action = na.omit)
+summary(modelo2)
+#What value of λ did you obtain? Did the value of the slope change between the two models? We can also conduct multiple regression with the same framework. Let's now look at the relationship between body size & various different parameters of song, before I tried fixing it it gave: Warning in Initialize.corPhyl(X[[i]], ...) : No covariate specified, species will be taken as ordered in the data frame. To avoid this message, specify a covariate containing the species names with the 'form' argument.
+modelo3<-gls(Lnote ~ Lnalt + wing,data = datos,correlation =corPagel(value = 1,phy = arbol.cortado,form = ~ Species),na.action = na.omit)
+summary(modelo3)
+#Now let's try to repeat these analyses with caper. This package funcions in a manner that it is a little bit different. We need to combine our data and tree into an object with a special class: "comparative.data". In addition to the tree, this object contains a data frame in which one column contains the names of the species. The easiest way for us to get this data matrix is just to re-read our dataset from file and change the value of the argument row.names as follows:
+library(caper)
+datos<-read.csv("Barbetdata.csv",header=TRUE)
+comp.data<-comparative.data(arbol.cortado, datos, names.col="Species", vcv.dim=2, warn.dropped=TRUE)
+datos <- read.csv("Barbetdata.csv", header = TRUE)
+rownames(datos) <- datos$Species
+library(nlme)
+library(ape)
+modelo4 <- pgls(Lnote ~ Lnalt,data = comp.data)
+summary(modelo4)
+modelo5 <- pgls(Lnote ~ Lnalt,data = comp.data,lambda = "ML")
+summary(modelo5)
+modelo6 <- pgls(Lnote ~ Lnalt + wing,data = comp.data,lambda = "ML")
+summary(modelo6)
+modelo7 <- pgls(patch ~ wing,data = comp.data,lambda = "ML")
+summary(modelo7)
+#An interesting feature of caper is that it also permits us to easily visualize, for instance, a likelihood surface for our parameters. Here is the likelihood surface for the parameter λ:
+lm.lk<-pgls.profile(modelo7, which="lambda")
+plot(lm.lk)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
